@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>내 팀 HQ</title>
+<style>
+:root{--bg:#f6f5f2;--card:#fff;--tx:#1d1d1b;--sub:#6b6a66;--bd:#e3e1db;--ac:#e8590c;--acbg:#fff1e8;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#171716;--card:#232321;--tx:#f0efeb;--sub:#a3a29c;--bd:#37362f;--ac:#ff8a4c;--acbg:#3a2a20}}
+:root[data-theme="dark"]{--bg:#171716;--card:#232321;--tx:#f0efeb;--sub:#a3a29c;--bd:#37362f;--ac:#ff8a4c;--acbg:#3a2a20}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font-family:-apple-system,"Apple SD Gothic Neo","Noto Sans KR","Malgun Gothic",sans-serif;line-height:1.55}
+.wrap{max-width:1000px;margin:0 auto;padding:16px}
+header{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;margin-bottom:16px}
+h1{font-size:20px;margin:0}
+.sub{color:var(--sub);font-size:13px}
+.clock{display:flex;gap:8px;align-items:center;background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:8px 12px;font-size:13px}
+input,textarea,select{width:100%;font:inherit;font-size:14px;color:var(--tx);background:var(--bg);border:1px solid var(--bd);border-radius:8px;padding:8px 10px}
+textarea{min-height:110px;resize:vertical}
+input[type=time]{width:auto}
+label{display:block;font-size:12px;font-weight:600;color:var(--sub);margin:10px 0 4px}
+.grid{display:grid;grid-template-columns:230px 1fr;gap:16px}
+@media(max-width:700px){.grid{grid-template-columns:1fr}}
+.list{display:flex;flex-direction:column;gap:6px}
+@media(max-width:700px){.list{flex-direction:row;overflow-x:auto;padding-bottom:4px}}
+.mem{display:flex;gap:10px;align-items:center;text-align:left;background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:10px;cursor:pointer;color:var(--tx);font:inherit;min-width:170px}
+.mem.on{border-color:var(--ac);background:var(--acbg)}
+.mem .e{font-size:24px}.mem b{display:block;font-size:14px}.mem small{color:var(--sub);font-size:12px}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:16px}
+.card h2{margin:0 0 2px;font-size:17px}
+button.pri{background:var(--ac);color:#fff;border:0;border-radius:10px;padding:10px 16px;font:inherit;font-weight:600;cursor:pointer;margin-top:12px}
+button.pri:disabled{opacity:.5}
+button.sec{background:none;border:1px solid var(--bd);color:var(--tx);border-radius:8px;padding:5px 10px;font:inherit;font-size:12px;cursor:pointer}
+.out{margin-top:14px;border-top:1px dashed var(--bd);padding-top:12px;white-space:pre-wrap;word-break:break-word;font-size:14px}
+.out h3{font-size:15px;margin:12px 0 2px}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.badge{font-size:11px;background:var(--acbg);color:var(--ac);padding:2px 8px;border-radius:99px}
+.add{margin-top:6px;border-style:dashed;background:none;justify-content:center;color:var(--sub)}
+.hist{margin-top:14px;font-size:12px;color:var(--sub)}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <div><h1>🏢 내 팀 HQ</h1><div class="sub" id="greet"></div></div>
+  <div class="clock">⏰ 출근 시간 <input type="time" id="wt"> <span id="wstat" class="badge"></span></div>
+</header>
+<div class="grid">
+  <div class="list" id="list"></div>
+  <div class="card" id="panel"></div>
+</div>
+</div>
+<script>
+const ST={get(k,d){try{const v=localStorage.getItem(k);return v==null?d:JSON.parse(v)}catch(e){return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
+const today=()=>new Date().toISOString().slice(0,10);
+const TEAM=[
+{id:'m1',emoji:'📡',name:'마케터1',role:'트렌드 리서처',desc:'웹 검색으로 요즘 트렌드·이슈·큰 사건·밈을 아침마다 브리핑합니다.',auto:true,
+ fields:[{k:'focus',label:'관심 분야 (선택)',ph:'예: 뷰티, 라이브커머스, 20-30대 여성',type:'text',keep:1}],
+ prompt:v=>`너는 커머스 팀의 트렌드 리서처 '마케터1'이다. 오늘(${new Date().toLocaleDateString('ko-KR')}) 아침 팀장에게 올릴 브리핑을 작성해라. 관심 분야: ${v.focus||'전반'}.
+구성: ## 오늘의 한 줄 요약 / ## 요즘 트렌드 / ## 화제의 이슈·큰 사건 / ## 유행하는 밈 / ## 우리 상품에 써먹을 아이디어 3가지. 각 항목은 짧고 스캔하기 쉽게. 웹 검색 도구로 오늘 기준 최신 뉴스·트렌드를 확인해 반영하고 각 항목 끝에 (매체명)으로 출처를 적어라. 확인 안 되는 정보는 '확인 필요'로 표시하고 지어내지 마라.`},
+{id:'m2',emoji:'📊',name:'마케터2',role:'데이터 분석가',desc:'데이터를 붙여넣으면 분석하고, 효율적인 마케팅 방향과 백업 메모를 남깁니다.',
+ fields:[{k:'prod',label:'상품/캠페인',ph:'예: 비타민C 세럼 라이브 방송',type:'text',keep:1},{k:'data',label:'데이터 (CSV·표·숫자 그대로 붙여넣기)',ph:'채널별 매출, 클릭률, 시청자수 등',type:'textarea'}],
+ prompt:v=>`너는 커머스 팀의 데이터 마케터 '마케터2'다. 상품: ${v.prod||'미기재'}.\n아래 데이터를 분석해라.\n출력: ## 핵심 발견 / ## 잘 된 것·안 된 것 / ## 효율 개선 액션 (우선순위순) / ## 백업 메모 (나중에 다시 볼 수치 요약) / ## 추가로 필요한 데이터.\n데이터에 없는 수치는 만들지 마라.\n\n${v.data}`},
+{id:'jr',emoji:'📝',name:'막내 신입',role:'회의록 정리',desc:'대충 적은 회의 메모를 보고서 형태로 정리합니다.',
+ fields:[{k:'title',label:'회의 제목 (선택)',ph:'예: 주간 방송 기획 회의',type:'text'},{k:'memo',label:'회의 메모 (대충 써도 OK)',ph:'키워드, 반말, 줄바꿈 엉망이어도 괜찮아요',type:'textarea'}],
+ prompt:v=>`너는 막내 신입이다. 팀장이 대충 적은 회의 메모를 보고서로 정리해라. 제목: ${v.title||'(메모에서 유추)'}.\n형식: ## 회의 개요 / ## 핵심 논의 / ## 결정 사항 / ## 액션 아이템 (담당자·기한, 없으면 '미정') / ## 확인 필요·열린 질문.\n메모에 없는 내용은 추가하지 말고, 모호한 부분은 '확인 필요'로 남겨라.\n\n메모:\n${v.memo}`},
+{id:'pd',emoji:'🎬',name:'PD',role:'큐시트 제작',desc:'큐시트 틀을 저장해두고, 상품 정보만 넣으면 새 큐시트를 만듭니다.',
+ fields:[{k:'tpl',label:'큐시트 틀 (한 번 저장해두면 계속 사용)',ph:'기존 큐시트를 붙여넣거나 구간 구조를 적어주세요\n예: 오프닝 3분 / 상품소개 10분 / 시연 / 혜택 안내 / 클로징',type:'textarea',keep:1},{k:'info',label:'이번 메인 상품 정보',ph:'상품명, 가격, 혜택, 셀링포인트, 방송 일시·시간 등',type:'textarea',keep:1}],
+ prompt:v=>`너는 라이브 방송 PD다. 아래 [큐시트 틀]의 구조·시간 배분·표기 방식을 그대로 유지하고, [상품 정보]에 맞게 내용만 바꿔서 이번 방송 큐시트를 완성해라. 상품 정보에 없는 가격·혜택은 지어내지 말고 '확인 필요'로 표시해라. 큐시트 본문은 반드시 첫 줄을 헤더 '시간 | 구간 | 내용 | 멘트 포인트'로 쓰고, 이후 구간마다 정확히 한 줄씩 ' | '로 구분해 써라(칸 안에서 줄바꿈과 '|' 금지, 마크다운 표 구분선 금지). 표 앞에는 ## 제목 한 줄과 방송 요약 한두 줄만 둬라.\n\n[큐시트 틀]\n${v.tpl}\n\n[상품 정보]\n${v.info}`},
+{id:'ds',emoji:'🎨',name:'디자이너',role:'콘텐츠·UIUX',desc:'SNS 콘텐츠 기획안과 앱 UI/UX 구성을 잡아줍니다.',
+ fields:[{k:'type',label:'작업 종류',type:'select',opts:['SNS 콘텐츠 (카드뉴스/피드)','SNS 숏폼 스토리보드','앱 화면 UI/UX 구성','배너/상세페이지 레이아웃']},{k:'brief',label:'요청 내용',ph:'상품, 타깃, 톤앤매너, 채널, 참고사항',type:'textarea'}],
+ prompt:v=>`너는 콘텐츠·UIUX 디자이너다. 작업: ${v.type}.\n결과물은 바로 제작에 들어갈 수 있는 기획안으로 써라: ## 콘셉트 / ## 컬러·타이포 제안 / ## 구성 (장면·슬라이드·화면별로 번호를 붙여 비주얼 설명, 카피, 레이아웃) / ## 캡션·해시태그 또는 UX 포인트 / ## 제작 시 주의점.\n\n요청:\n${v.brief}`}
+];
+let custom=ST.get('custom',[]);
+const all=()=>[...TEAM,...custom.map(c=>({id:c.id,emoji:c.emoji,name:c.name,role:c.role,desc:c.role,custom:1,
+ fields:[{k:'req',label:'요청 내용',ph:'이 팀원에게 시킬 일',type:'textarea'}],prompt:v=>`너는 '${c.name}'(${c.role})이다. 역할 지침: ${c.rules}\n\n요청:\n${v.req}`}))];
+let cur='m1',busy=false,ctl=null;
+const $=id=>document.getElementById(id);
+const esc=s=>s.replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+const fmt=t=>esc(t).replace(/^#{1,3} (.*)$/gm,'<h3>$1</h3>').replace(/\*\*(.+?)\*\*/g,'<b>$1</b>');
+
+
+function saveFile(name,data,type){
+  const u=URL.createObjectURL(new Blob([data],{type}));
+  const a=document.createElement('a');a.href=u;a.download=name;document.body.append(a);a.click();a.remove();
+  setTimeout(()=>URL.revokeObjectURL(u),2000);
+}
+async function askAI(prompt,{signal,onText,search}={}){
+  const r=await fetch('/api/ask',{method:'POST',signal,headers:{'Content-Type':'application/json','x-access-code':ST.get('code','')},body:JSON.stringify({prompt,search:!!search})});
+  if(r.status===401){
+    const c=window.prompt('팀 접근 코드를 입력하세요');
+    if(c){ST.set('code',c);return askAI(prompt,{signal,onText,search})}
+    throw {code:'not_granted'};
+  }
+  if(!r.ok)throw {code:'error'};
+  const rd=r.body.getReader(),dec=new TextDecoder();let text='';
+  for(;;){const {done,value}=await rd.read();if(done)break;text+=dec.decode(value,{stream:true});if(onText)onText({text})}
+  return {text};
+}
+function cueRows(t){
+  return t.split('\n').filter(l=>l.includes('|')&&!/^[\s|:\-]+$/.test(l)).map(l=>l.replace(/^\s*\|/,'').replace(/\|\s*$/,'').split('|').map(c=>c.trim().replace(/\*\*/g,'')));
+}
+function toCSV(rows){return '\uFEFF'+rows.map(r=>r.map(c=>'"'+c.replace(/"/g,'""')+'"').join(',')).join('\r\n')}
+function extras(m,text){
+  const box=$('ex');if(!box)return;box.innerHTML='';
+  if(m.id==='pd'){
+    const rows=cueRows(text);if(rows.length<2)return;
+    const b=document.createElement('button');b.className='sec';b.textContent='📥 엑셀용 CSV로 받기';
+    b.onclick=()=>saveFile('큐시트_'+today()+'.csv',toCSV(rows),'text/csv;charset=utf-8');
+    box.append(b);
+  }
+  if(m.id==='ds'){
+    const b=document.createElement('button');b.className='sec';b.textContent='🖼️ 시안 그려보기';
+    b.onclick=()=>mock(text,b);box.append(b);
+  }
+}
+async function mock(plan,btn){
+  if(busy)return;
+  const app=/앱 화면/.test(getVals().type||'');
+  busy=true;btn.disabled=true;btn.textContent='그리는 중...';
+  $('mk').innerHTML='<div class="sub">⏳ 시안 제작 중 (30초~1분)</div>';
+  try{
+    const r=await askAI(`아래 디자인 기획안의 첫 화면(또는 첫 슬라이드)을 시각 시안으로 만들어라. 조건: 완성된 HTML 조각 하나만 출력(설명·코드펜스 금지). 인라인 <style>만 사용, 스크립트·외부 이미지·외부 폰트 금지. 이미지는 CSS 그라데이션·도형·이모지로 대체. 최상위 요소 크기는 ${app?'390px x 780px (모바일 앱 화면)':'1080 비율의 정사각형, width:540px;height:540px'}. 폰트는 font-family:"Apple SD Gothic Neo","Noto Sans KR",sans-serif. 기획안의 컬러·카피를 그대로 반영.\n\n기획안:\n${plan}`,{});
+    let h=r.text.replace(/^```(?:html)?\s*/i,'').replace(/```\s*$/,'').replace(/<script[\s\S]*?<\/script>/gi,'');
+    const doc='<!doctype html><meta charset="utf-8"><body style="margin:0;display:flex;justify-content:center;background:#eee">'+h;
+    $('mk').innerHTML='';
+    const f=document.createElement('iframe');f.setAttribute('sandbox','');f.srcdoc=doc;
+    f.style.cssText='width:100%;height:'+(app?'800px':'560px')+';border:1px solid var(--bd);border-radius:10px;background:#eee';
+    const d=document.createElement('button');d.className='sec';d.textContent='📥 시안 HTML 받기';d.style.marginTop='8px';
+    d.onclick=()=>saveFile('시안_'+today()+'.html',doc,'text/html');
+    $('mk').append(f,d);
+  }catch(e){$('mk').innerHTML='<div class="sub">시안을 만들지 못했어요. 다시 눌러 주세요.</div>'}
+  busy=false;btn.disabled=false;btn.textContent='🖼️ 시안 다시 그리기';
+}
+function renderList(){
+  $('list').innerHTML=all().map(m=>`<button class="mem ${m.id===cur?'on':''}" data-id="${m.id}"><span class="e">${m.emoji}</span><span><b>${esc(m.name)}</b><small>${esc(m.role)}</small></span></button>`).join('')+`<button class="mem add" data-id="__add">＋ 팀원 충원</button>`;
+  $('list').querySelectorAll('.mem').forEach(b=>b.onclick=()=>{cur=b.dataset.id;renderList();renderPanel()});
+}
+function renderPanel(){
+  if(cur==='__add')return renderAdd();
+  const m=all().find(x=>x.id===cur);
+  const vals=ST.get('v_'+m.id,{});
+  $('panel').innerHTML=`<div class="row"><h2>${m.emoji} ${esc(m.name)}</h2><span class="badge">${esc(m.role)}</span>${m.custom?'<button class="sec" id="del">삭제</button>':''}</div>
+  <div class="sub">${esc(m.desc)}</div>
+  ${m.fields.map(f=>`<label>${f.label}</label>`+(f.type==='textarea'?`<textarea data-k="${f.k}" placeholder="${esc(f.ph||'')}">${esc(vals[f.k]||'')}</textarea>`:f.type==='select'?`<select data-k="${f.k}">${f.opts.map(o=>`<option>${o}</option>`).join('')}</select>`:`<input data-k="${f.k}" placeholder="${esc(f.ph||'')}" value="${esc(vals[f.k]||'')}">`)).join('')}
+  <div class="row"><button class="pri" id="run">${m.auto?'지금 브리핑 받기':'시키기'}</button><button class="sec" id="stop" style="display:none;margin-top:12px">중단</button></div>
+  <div id="out"></div><div class="hist" id="hist"></div><div class="row" id="ex" style="margin-top:10px"></div><div id="mk" style="margin-top:12px"></div>`;
+  $('panel').querySelectorAll('[data-k]').forEach(el=>el.oninput=()=>saveVals(m));
+  $('run').onclick=()=>run(m);
+  if($('del'))$('del').onclick=()=>{custom=custom.filter(c=>c.id!==m.id);ST.set('custom',custom);cur='m1';renderList();renderPanel()};
+  const last=ST.get('last_'+m.id,null);
+  if(last){showOut(last.text,`마지막 결과 · ${last.at}`);extras(m,last.text)}
+}
+function getVals(){const v={};$('panel').querySelectorAll('[data-k]').forEach(el=>v[el.dataset.k]=el.value);return v}
+function saveVals(m){const v=getVals(),keep={};m.fields.forEach(f=>{if(f.keep)keep[f.k]=v[f.k]});ST.set('v_'+m.id,keep)}
+function showOut(text,meta){
+  $('out').innerHTML=`<div class="out">${fmt(text)}</div>`;
+  $('hist').innerHTML=(meta||'')+' <button class="sec" id="cp">복사</button>';
+  $('cp').onclick=()=>{navigator.clipboard&&navigator.clipboard.writeText(text).then(()=>{$('cp').textContent='복사됨 ✓'}).catch(()=>{})};
+}
+async function run(m,silent){
+  if(busy)return;
+  const v=getVals();
+  const need=m.fields.filter(f=>f.type==='textarea').some(f=>!v[f.k]&&!(f.keep&&false));
+  if(need&&!m.auto){alert('내용을 입력해 주세요.');return}
+  busy=true;$('run').disabled=true;$('stop').style.display='';ctl=new AbortController();$('stop').onclick=()=>ctl.abort();
+  $('out').innerHTML='<div class="out">⏳ 작업 중...</div>';
+  let text='';
+  try{
+    const r=await askAI(m.prompt(v),{signal:ctl.signal,search:m.auto,onText:({text:t})=>{text=t;showOut(t,'작성 중...')}});
+    text=r.text;
+    const at=new Date().toLocaleString('ko-KR');
+    ST.set('last_'+m.id,{text,at});
+    if(m.auto)ST.set('brief_day',today());
+    showOut(text,'완료 · '+at);extras(m,text);updWork();
+  }catch(e){
+    if(text)showOut(text,'중단됨');
+    else $('out').innerHTML=`<div class="out">${e&&e.code==='not_granted'?'권한이 허용되지 않았어요.':e&&(e.code==='cancelled'||e.name==='AbortError')?'중단했어요.':'문제가 생겼어요. 잠시 후 다시 시도해 주세요.'}</div>`;
+  }
+  busy=false;if($('run'))$('run').disabled=false;if($('stop'))$('stop').style.display='none';
+}
+function renderAdd(){
+  $('panel').innerHTML=`<h2>＋ 새 팀원 충원</h2><div class="sub">역할만 적어두면 언제든 일을 시킬 수 있어요.</div>
+  <label>이름</label><input id="an" placeholder="예: 카피라이터"><label>이모지</label><input id="ae" value="🧑‍💼" maxlength="4">
+  <label>역할 한 줄</label><input id="ar" placeholder="예: 상품 상세페이지 카피 작성">
+  <label>일하는 방식·지침</label><textarea id="ak" placeholder="예: 20대 여성 타깃, 친근한 말투, 과장 표현 금지"></textarea>
+  <button class="pri" id="ok">채용하기</button>`;
+  $('ok').onclick=()=>{const n=$('an').value.trim();if(!n)return;const id='c'+Date.now();custom.push({id,name:n,emoji:$('ae').value||'🧑‍💼',role:$('ar').value||'팀원',rules:$('ak').value||'요청을 성실히 수행한다.'});ST.set('custom',custom);cur=id;renderList();renderPanel()};
+}
+/* 출근 시간 */
+function updWork(){
+  const t=$('wt').value,done=ST.get('brief_day','')===today();
+  $('wstat').textContent=done?'오늘 브리핑 완료':'브리핑 대기';
+}
+function checkWork(){
+  const t=$('wt').value;if(!t||!ST.get('code',''))return;
+  const [h,mi]=t.split(':').map(Number),now=new Date();
+  if(now.getHours()*60+now.getMinutes()>=h*60+mi&&ST.get('brief_day','')!==today()&&!busy){
+    cur='m1';renderList();renderPanel();run(all()[0],true);
+  }
+}
+$('wt').value=ST.get('workTime','09:00');
+$('wt').onchange=()=>{ST.set('workTime',$('wt').value);updWork();checkWork()};
+const hr=new Date().getHours();
+$('greet').textContent=(hr<12?'좋은 아침이에요':hr<18?'오늘도 수고 많으세요':'늦게까지 고생 많으세요')+', 팀장님. 출근 시간이 지나 이 페이지를 열면 마케터1이 자동으로 브리핑을 시작해요.';
+renderList();renderPanel();updWork();
+setTimeout(checkWork,600);
+</script>
+</body>
+</html>
