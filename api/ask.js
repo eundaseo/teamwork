@@ -1,11 +1,11 @@
-// Vercel Serverless Function: 브라우저 -> (여기) -> Anthropic API
-// API 키는 서버 환경변수에만 있고, 브라우저에는 절대 노출되지 않습니다.
+// Vercel Serverless Function (Gemini 무료 키 버전): 브라우저 -> (여기) -> Google Gemini API
+// 이 파일 내용을 GitHub 저장소의 api/ask.js 에 통째로 덮어쓰세요.
 module.exports = async (req, res) => {
   if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
 
-  const { ACCESS_CODE, ANTHROPIC_API_KEY, ANTHROPIC_MODEL, ENABLE_SEARCH } = process.env;
-  if (!ACCESS_CODE || !ANTHROPIC_API_KEY) {
-    return res.status(500).json({ error: 'ACCESS_CODE, ANTHROPIC_API_KEY 환경변수를 설정하세요.' });
+  const { ACCESS_CODE, GEMINI_API_KEY, GEMINI_MODEL, ENABLE_SEARCH } = process.env;
+  if (!ACCESS_CODE || !GEMINI_API_KEY) {
+    return res.status(500).json({ error: 'ACCESS_CODE, GEMINI_API_KEY 환경변수를 설정하세요.' });
   }
   if (req.headers['x-access-code'] !== ACCESS_CODE) {
     return res.status(401).json({ error: 'unauthorized' });
@@ -16,32 +16,33 @@ module.exports = async (req, res) => {
     return res.status(400).json({ error: 'invalid prompt' });
   }
 
-  const body = {
-    model: ANTHROPIC_MODEL || 'claude-sonnet-5-5',
-    max_tokens: 4000,
-    stream: true,
-    messages: [{ role: 'user', content: prompt }],
-  };
-  if (search && ENABLE_SEARCH !== 'false') {
-    body.tools = [{ type: 'web_search_20250305', name: 'web_search', max_uses: 5 }];
-  }
+  const useSearch = !!search && ENABLE_SEARCH === 'true';
+  const text = useSearch
+    ? prompt
+    : prompt + (search ? '\n\n[참고] 지금은 웹 검색을 쓸 수 없다. 출처(매체명)를 절대 지어내지 말고, 학습된 지식 기반이라 최신 뉴스와 다를 수 있다고 첫 줄에 밝혀라.' : '');
 
+  const body = {
+    contents: [{ role: 'user', parts: [{ text }] }],
+    generationConfig: { maxOutputTokens: 4000 },
+  };
+  if (useSearch) body.tools = [{ google_search: {} }];
+
+  const model = GEMINI_MODEL || 'gemini-2.5-flash';
   let up;
   try {
-    up = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        'x-api-key': ANTHROPIC_API_KEY,
-        'anthropic-version': '2023-06-01',
-      },
-      body: JSON.stringify(body),
-    });
+    up = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse`,
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-goog-api-key': GEMINI_API_KEY },
+        body: JSON.stringify(body),
+      }
+    );
   } catch (e) {
     return res.status(502).json({ error: 'upstream unreachable' });
   }
   if (!up.ok) {
-    console.error('Anthropic error', up.status, await up.text());
+    console.error('Gemini error', up.status, await up.text());
     return res.status(502).json({ error: 'upstream ' + up.status });
   }
 
@@ -59,11 +60,8 @@ module.exports = async (req, res) => {
         if (!line.startsWith('data:')) continue;
         let ev;
         try { ev = JSON.parse(line.slice(5).trim()); } catch { continue; }
-        if (ev.type === 'content_block_delta' && ev.delta && ev.delta.type === 'text_delta') {
-          res.write(ev.delta.text);
-        } else if (ev.type === 'error') {
-          res.write('\n\n[오류] 응답 중 문제가 생겼어요. 다시 시도해 주세요.');
-        }
+        const parts = (ev.candidates && ev.candidates[0] && ev.candidates[0].content && ev.candidates[0].content.parts) || [];
+        for (const p of parts) if (p.text && !p.thought) res.write(p.text);
       }
     }
   } catch (e) {
